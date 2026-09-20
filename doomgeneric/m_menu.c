@@ -74,7 +74,10 @@ int			showMessages = 1;
 	
 
 // Blocky mode, has default, 0 = high, 1 = normal
-int			detailLevel = 0;
+#ifndef DEFAULT_DETAIL
+#define DEFAULT_DETAIL 0
+#endif
+int			detailLevel = DEFAULT_DETAIL;
 int			screenblocks = 10;
 
 // temp for screenblocks (0-9)
