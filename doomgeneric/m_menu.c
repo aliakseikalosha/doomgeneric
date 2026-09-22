@@ -80,6 +80,10 @@ int			showMessages = 1;
 int			detailLevel = DEFAULT_DETAIL;
 int			screenblocks = 10;
 
+// 1-bit display conversion (consumed by the video backend), has default,
+// 0 = ordered dither, 1 = flat threshold auto-cut from the current palette
+int			ditherMode = 0;
+
 // temp for screenblocks (0-9)
 int			screenSize;
 
@@ -195,6 +199,7 @@ void M_ChangeDetail(int choice);
 void M_SizeDisplay(int choice);
 void M_StartGame(int choice);
 void M_Sound(int choice);
+void M_ChangeDitherMode(int choice);
 
 void M_FinishReadThis(int choice);
 void M_LoadSelect(int choice);
@@ -341,6 +346,7 @@ enum
     mousesens,
     option_empty2,
     soundvol,
+    dithermode,
     opt_end
 } options_e;
 
@@ -353,7 +359,8 @@ menuitem_t OptionsMenu[]=
     {-1,"",0,'\0'},
     {2,"M_MSENS",	M_ChangeSensitivity,'m'},
     {-1,"",0,'\0'},
-    {1,"M_SVOL",	M_Sound,'s'}
+    {1,"M_SVOL",	M_Sound,'s'},
+    {1,"",		M_ChangeDitherMode,'d'}
 };
 
 menu_t  OptionsDef =
@@ -1005,6 +1012,9 @@ void M_DrawOptions(void)
 
     M_DrawThermo(OptionsDef.x,OptionsDef.y+LINEHEIGHT*(scrnsize+1),
 		 9,screenSize);
+
+    M_WriteText(OptionsDef.x, OptionsDef.y + LINEHEIGHT * dithermode,
+                ditherMode ? "DITHER: THRESHOLD" : "DITHER: ORDERED");
 }
 
 void M_Options(int choice)
@@ -1235,6 +1245,21 @@ void M_SizeDisplay(int choice)
 	
 
     R_SetViewSize (screenblocks, detailLevel);
+}
+
+
+
+
+//
+//      Toggle the 1-bit display conversion between ordered dither and a
+//      flat threshold (read by the video backend as ditherMode). The
+//      threshold's cutoff itself is not set here - the video backend
+//      derives it from the current palette (see build_luma).
+//
+void M_ChangeDitherMode(int choice)
+{
+    choice = 0;
+    ditherMode = 1 - ditherMode;
 }
 
 
