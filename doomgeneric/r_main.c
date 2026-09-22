@@ -683,7 +683,10 @@ void R_ExecuteSetViewSize (void)
     else
     {
 	scaledviewwidth = setblocks*32;
-	viewheight = (setblocks*168/10)&~7;
+	// 168 is the vanilla (SCREENHEIGHT=200) view height at setblocks==10, i.e.
+	// SCREENHEIGHT minus the 32-pixel status bar; scale that to whatever
+	// SCREENHEIGHT actually is so non-200-tall builds still fill the screen.
+	viewheight = (setblocks*(SCREENHEIGHT-32)/10)&~7;
     }
     
     detailshift = setdetail;
