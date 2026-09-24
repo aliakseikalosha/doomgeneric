@@ -81,8 +81,12 @@ int			detailLevel = DEFAULT_DETAIL;
 int			screenblocks = 10;
 
 // 1-bit display conversion (consumed by the video backend), has default,
-// 0 = ordered dither, 1 = flat threshold auto-cut from the current palette
+// 0 = 2x2 ordered dither, 1 = threshold auto-cut from the current palette,
+// 2 = 4x4 ordered dither, 3 = 16x16 blue noise ordered dither, 4 = threshold
+// with its error diffused to neighbouring pixels (Floyd-Steinberg; see
+// dgpd_dither.c for the modes themselves)
 int			ditherMode = 0;
+#define DITHER_MODE_COUNT 5
 
 // temp for screenblocks (0-9)
 int			screenSize;
@@ -360,7 +364,7 @@ menuitem_t OptionsMenu[]=
     {2,"M_MSENS",	M_ChangeSensitivity,'m'},
     {-1,"",0,'\0'},
     {1,"M_SVOL",	M_Sound,'s'},
-    {1,"",		M_ChangeDitherMode,'d'}
+    {2,"",		M_ChangeDitherMode,'d'}
 };
 
 menu_t  OptionsDef =
@@ -993,6 +997,7 @@ void M_Episode(int choice)
 //
 static char *detailNames[2] = {"M_GDHIGH","M_GDLOW"};
 static char *msgNames[2] = {"M_MSGOFF","M_MSGON"};
+static char *ditherModeNames[DITHER_MODE_COUNT] = {"DITHER: ORDERED 2X2", "DITHER: THRESHOLD", "DITHER: ORDERED 4X4", "DITHER: BLUE NOISE", "DITHER: DIFFUSION"};
 
 void M_DrawOptions(void)
 {
@@ -1014,7 +1019,7 @@ void M_DrawOptions(void)
 		 9,screenSize);
 
     M_WriteText(OptionsDef.x, OptionsDef.y + LINEHEIGHT * dithermode,
-                ditherMode ? "DITHER: THRESHOLD" : "DITHER: ORDERED");
+                ditherModeNames[ditherMode]);
 }
 
 void M_Options(int choice)
@@ -1251,15 +1256,22 @@ void M_SizeDisplay(int choice)
 
 
 //
-//      Toggle the 1-bit display conversion between ordered dither and a
-//      flat threshold (read by the video backend as ditherMode). The
-//      threshold's cutoff itself is not set here - the video backend
-//      derives it from the current palette (see build_luma).
+//      Cycle the 1-bit display conversion between its modes (read by the
+//      video backend as ditherMode; see dgpd_dither.c). Any per-mode
+//      parameters (e.g. the threshold mode's cutoff) are not set here -
+//      the video backend derives them from the current palette.
 //
 void M_ChangeDitherMode(int choice)
 {
-    choice = 0;
-    ditherMode = 1 - ditherMode;
+    switch(choice)
+    {
+      case 0:
+	ditherMode = (ditherMode + DITHER_MODE_COUNT - 1) % DITHER_MODE_COUNT;
+	break;
+      case 1:
+	ditherMode = (ditherMode + 1) % DITHER_MODE_COUNT;
+	break;
+    }
 }
 
 
