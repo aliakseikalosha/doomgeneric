@@ -88,6 +88,10 @@ int			screenblocks = 10;
 int			ditherMode = 0;
 #define DITHER_MODE_COUNT 5
 
+// Crank-out auto fire (consumed by the Playdate input layer), toggled from the
+// Options menu; 1 = on
+int			autoFire = 1;
+
 // temp for screenblocks (0-9)
 int			screenSize;
 
@@ -204,6 +208,7 @@ void M_SizeDisplay(int choice);
 void M_StartGame(int choice);
 void M_Sound(int choice);
 void M_ChangeDitherMode(int choice);
+void M_ChangeAutoFire(int choice);
 
 void M_FinishReadThis(int choice);
 void M_LoadSelect(int choice);
@@ -351,6 +356,7 @@ enum
     option_empty2,
     soundvol,
     dithermode,
+    autofire,
     opt_end
 } options_e;
 
@@ -364,7 +370,8 @@ menuitem_t OptionsMenu[]=
     {2,"M_MSENS",	M_ChangeSensitivity,'m'},
     {-1,"",0,'\0'},
     {1,"M_SVOL",	M_Sound,'s'},
-    {2,"",		M_ChangeDitherMode,'d'}
+    {2,"",		M_ChangeDitherMode,'d'},
+    {2,"",		M_ChangeAutoFire,'a'}
 };
 
 menu_t  OptionsDef =
@@ -1020,6 +1027,9 @@ void M_DrawOptions(void)
 
     M_WriteText(OptionsDef.x, OptionsDef.y + LINEHEIGHT * dithermode,
                 ditherModeNames[ditherMode]);
+
+    M_WriteText(OptionsDef.x, OptionsDef.y + LINEHEIGHT * autofire,
+                autoFire ? "AUTO FIRE: ON" : "AUTO FIRE: OFF");
 }
 
 void M_Options(int choice)
@@ -1275,6 +1285,15 @@ void M_ChangeDitherMode(int choice)
 }
 
 
+
+
+//
+//      Toggle crank-out auto fire (read by the Playdate input layer as autoFire).
+//
+void M_ChangeAutoFire(int choice)
+{
+    autoFire = !autoFire;
+}
 
 
 //
