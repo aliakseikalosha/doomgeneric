@@ -83,10 +83,11 @@ int			screenblocks = 10;
 // 1-bit display conversion (consumed by the video backend), has default,
 // 0 = 2x2 ordered dither, 1 = threshold auto-cut from the current palette,
 // 2 = 4x4 ordered dither, 3 = 16x16 blue noise ordered dither, 4 = threshold
-// with its error diffused to neighbouring pixels (Floyd-Steinberg; see
+// with its error diffused to neighbouring pixels (Floyd-Steinberg), 5 = 2x2
+// ordered dither with its banding error carried to neighbouring pixels (see
 // dgpd_dither.c for the modes themselves)
 int			ditherMode = 0;
-#define DITHER_MODE_COUNT 5
+#define DITHER_MODE_COUNT 6
 
 // Crank-out auto fire (consumed by the Playdate input layer), toggled from the
 // Options menu; 1 = on
@@ -233,6 +234,7 @@ void M_DrawThermo(int x,int y,int thermWidth,int thermDot);
 void M_DrawEmptyCell(menu_t *menu,int item);
 void M_DrawSelCell(menu_t *menu,int item);
 void M_WriteText(int x, int y, char *string);
+void M_WriteTextBig(int x, int y, char *string);
 int  M_StringWidth(char *string);
 int  M_StringHeight(char *string);
 void M_StartMessage(char *string,void *routine,boolean input);
@@ -362,14 +364,14 @@ enum
 
 menuitem_t OptionsMenu[]=
 {
-    {1,"M_ENDGAM",	M_EndGame,'e'},
-    {1,"M_MESSG",	M_ChangeMessages,'m'},
-    {1,"M_DETAIL",	M_ChangeDetail,'g'},
-    {2,"M_SCRNSZ",	M_SizeDisplay,'s'},
+    {1,"",	M_EndGame,'e'},
+    {1,"",	M_ChangeMessages,'m'},
+    {1,"",	M_ChangeDetail,'g'},
+    {2,"",	M_SizeDisplay,'s'},
     {-1,"",0,'\0'},
-    {2,"M_MSENS",	M_ChangeSensitivity,'m'},
+    {2,"",	M_ChangeSensitivity,'m'},
     {-1,"",0,'\0'},
-    {1,"M_SVOL",	M_Sound,'s'},
+    {1,"",	M_Sound,'s'},
     {2,"",		M_ChangeDitherMode,'d'},
     {2,"",		M_ChangeAutoFire,'a'}
 };
@@ -380,7 +382,7 @@ menu_t  OptionsDef =
     &MainDef,
     OptionsMenu,
     M_DrawOptions,
-    60,37,
+    40,37,
     0
 };
 
@@ -443,9 +445,9 @@ enum
 
 menuitem_t SoundMenu[]=
 {
-    {2,"M_SFXVOL",M_SfxVol,'s'},
+    {2,"",M_SfxVol,'s'},
     {-1,"",0,'\0'},
-    {2,"M_MUSVOL",M_MusicVol,'m'},
+    {2,"",M_MusicVol,'m'},
     {-1,"",0,'\0'}
 };
 
@@ -660,8 +662,14 @@ void M_SaveSelect(int choice)
     
     saveSlot = choice;
     M_StringCopy(saveOldString,savegamestrings[choice], SAVESTRINGSIZE);
-    if (!strcmp(savegamestrings[choice], EMPTYSTRING))
-	savegamestrings[choice][0] = 0;
+    // Default name: map and kills, e.g. "E1M1 5/20"
+    if (gamemode == commercial)
+	M_snprintf(savegamestrings[choice], SAVESTRINGSIZE, "MAP%02d %d/%d",
+		   gamemap, players[consoleplayer].killcount, totalkills);
+    else
+	M_snprintf(savegamestrings[choice], SAVESTRINGSIZE, "E%dM%d %d/%d",
+		   gameepisode, gamemap, players[consoleplayer].killcount,
+		   totalkills);
     saveCharIndex = strlen(savegamestrings[choice]);
 }
 
@@ -854,7 +862,9 @@ void M_DrawReadThis2(void)
 //
 void M_DrawSound(void)
 {
-    V_DrawPatchDirect (60, 38, W_CacheLumpName(DEH_String("M_SVOL"), PU_CACHE));
+    M_WriteTextBig(SoundDef.x, 30, "SOUND VOLUME");
+    M_WriteTextBig(SoundDef.x, SoundDef.y + LINEHEIGHT * sfx_vol + 1, "SFX VOLUME");
+    M_WriteTextBig(SoundDef.x, SoundDef.y + LINEHEIGHT * music_vol + 1, "MUSIC VOLUME");
 
     M_DrawThermo(SoundDef.x,SoundDef.y+LINEHEIGHT*(sfx_vol+1),
 		 16,sfxVolume);
@@ -1002,33 +1012,78 @@ void M_Episode(int choice)
 //
 // M_Options
 //
-static char *detailNames[2] = {"M_GDHIGH","M_GDLOW"};
-static char *msgNames[2] = {"M_MSGOFF","M_MSGON"};
-static char *ditherModeNames[DITHER_MODE_COUNT] = {"DITHER: ORDERED 2X2", "DITHER: THRESHOLD", "DITHER: ORDERED 4X4", "DITHER: BLUE NOISE", "DITHER: DIFFUSION"};
+
+//
+// Same font as M_WriteText, drawn at twice the size (menu labels).
+//
+void M_WriteTextBig(int x, int y, char *string)
+{
+    int c, w, col, i;
+    patch_t *patch;
+    column_t *column;
+    byte *dest, *source;
+
+    for ( ; *string; string++)
+    {
+	c = toupper(*string) - HU_FONTSTART;
+	if (c < 0 || c >= HU_FONTSIZE)
+	{
+	    x += 8;
+	    continue;
+	}
+
+	patch = hu_font[c];
+	w = SHORT(patch->width);
+	if (x + w * 2 > SCREENWIDTH)
+	    break;
+
+	V_MarkRect(x, y, w * 2, SHORT(patch->height) * 2);
+	for (col = 0; col < w; col++)
+	{
+	    column = (column_t *)((byte *)patch + LONG(patch->columnofs[col]));
+	    while (column->topdelta != 0xff)
+	    {
+		source = (byte *)column + 3;
+		dest = I_VideoBuffer + (y + column->topdelta * 2) * SCREENWIDTH
+		       + x + col * 2;
+		for (i = 0; i < column->length; i++)
+		{
+		    dest[0] = dest[1] = source[i];
+		    dest[SCREENWIDTH] = dest[SCREENWIDTH + 1] = source[i];
+		    dest += SCREENWIDTH * 2;
+		}
+		column = (column_t *)((byte *)column + column->length + 4);
+	    }
+	}
+	x += w * 2;
+    }
+}
+
+static char *ditherModeNames[DITHER_MODE_COUNT] = {"DITHER: ORDERED 2X2", "DITHER: THRESHOLD", "DITHER: ORDERED 4X4", "DITHER: BLUE NOISE", "DITHER: DIFFUSION", "DITHER: 2X2 CARRY"};
 
 void M_DrawOptions(void)
 {
+    static char *detailText[2] = {"DETAIL: HIGH", "DETAIL: LOW"};
+    int x = OptionsDef.x;
+    int y = OptionsDef.y + 1;
+
     V_DrawPatchDirect(108, 15, W_CacheLumpName(DEH_String("M_OPTTTL"),
                                                PU_CACHE));
-	
-    V_DrawPatchDirect(OptionsDef.x + 175, OptionsDef.y + LINEHEIGHT * detail,
-		      W_CacheLumpName(DEH_String(detailNames[detailLevel]),
-			              PU_CACHE));
 
-    V_DrawPatchDirect(OptionsDef.x + 120, OptionsDef.y + LINEHEIGHT * messages,
-                      W_CacheLumpName(DEH_String(msgNames[showMessages]),
-                                      PU_CACHE));
-
+    // All labels use the same (double size) font.
+    M_WriteTextBig(x, y + LINEHEIGHT * endgame, "END GAME");
+    M_WriteTextBig(x, y + LINEHEIGHT * messages,
+                showMessages ? "MESSAGES: ON" : "MESSAGES: OFF");
+    M_WriteTextBig(x, y + LINEHEIGHT * detail, detailText[detailLevel]);
+    M_WriteTextBig(x, y + LINEHEIGHT * scrnsize, "SCREEN SIZE");
+    M_DrawThermo(OptionsDef.x, OptionsDef.y + LINEHEIGHT * (scrnsize + 1),
+                 9, screenSize);
+    M_WriteTextBig(x, y + LINEHEIGHT * mousesens, "MOUSE SENSITIVITY");
     M_DrawThermo(OptionsDef.x, OptionsDef.y + LINEHEIGHT * (mousesens + 1),
-		 10, mouseSensitivity);
-
-    M_DrawThermo(OptionsDef.x,OptionsDef.y+LINEHEIGHT*(scrnsize+1),
-		 9,screenSize);
-
-    M_WriteText(OptionsDef.x, OptionsDef.y + LINEHEIGHT * dithermode,
-                ditherModeNames[ditherMode]);
-
-    M_WriteText(OptionsDef.x, OptionsDef.y + LINEHEIGHT * autofire,
+                 10, mouseSensitivity);
+    M_WriteTextBig(x, y + LINEHEIGHT * soundvol, "SOUND VOLUME");
+    M_WriteTextBig(x, y + LINEHEIGHT * dithermode, ditherModeNames[ditherMode]);
+    M_WriteTextBig(x, y + LINEHEIGHT * autofire,
                 autoFire ? "AUTO FIRE: ON" : "AUTO FIRE: OFF");
 }
 
@@ -1916,6 +1971,12 @@ boolean M_Responder (event_t* ev)
 	    currentMenu = currentMenu->prevMenu;
 	    itemOn = currentMenu->lastOn;
 	    S_StartSound(NULL,sfx_swtchn);
+	}
+	else
+	{
+	    // Top-level (main) menu: close it
+	    M_ClearMenus();
+	    S_StartSound(NULL,sfx_swtchx);
 	}
 	return true;
     }
