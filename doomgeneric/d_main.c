@@ -485,7 +485,9 @@ void D_PageTicker (void)
 //
 void D_PageDrawer (void)
 {
-    V_DrawPatch (0, 0, W_CacheLumpName(pagename, PU_CACHE));
+    // 320x200 art, stretched to fill SCREENHEIGHT
+    V_DrawPatchStretchedY (0, 0, W_CacheLumpName(pagename, PU_CACHE),
+                           SCREENHEIGHT);
 }
 
 
@@ -1555,7 +1557,9 @@ void D_DoomMain (void)
     else
 #endif
     {
-        savegamedir = M_GetSaveGameDir(D_SaveGameIWADName(gamemission));
+        // Savegames go in a folder per IWAD file (not per game mission, which
+        // would make doom.wad and doom1.wad share one).
+        savegamedir = M_GetSaveGameDir(iwadfile);
     }
 
     // Check for -file in shareware

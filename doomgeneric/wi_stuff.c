@@ -103,6 +103,10 @@
 #define DM_VICTIMSX    		5
 #define DM_VICTIMSY		50
 
+// The backdrops are 320x200 art. They are stretched to fill SCREENHEIGHT, so
+// positions measured on that art (map nodes, animations) are scaled to match.
+#define WI_SCALEY(y)		((y) * SCREENHEIGHT / 200)
+
 
 
 
@@ -401,7 +405,7 @@ static patch_t *background;
 // slam background
 void WI_slamBackground(void)
 {
-    V_DrawPatch(0, 0, background);
+    V_DrawPatchStretchedY(0, 0, background, SCREENHEIGHT);
 }
 
 // The ticker is used to detect keys
@@ -484,7 +488,7 @@ WI_drawOnLnode
     do
     {
 	left = lnodes[wbs->epsd][n].x - SHORT(c[i]->leftoffset);
-	top = lnodes[wbs->epsd][n].y - SHORT(c[i]->topoffset);
+	top = WI_SCALEY(lnodes[wbs->epsd][n].y) - SHORT(c[i]->topoffset);
 	right = left + SHORT(c[i]->width);
 	bottom = top + SHORT(c[i]->height);
 
@@ -504,7 +508,7 @@ WI_drawOnLnode
     if (fits && i<2)
     {
 	V_DrawPatch(lnodes[wbs->epsd][n].x,
-                    lnodes[wbs->epsd][n].y,
+                    WI_SCALEY(lnodes[wbs->epsd][n].y),
 		    c[i]);
     }
     else
@@ -612,7 +616,8 @@ void WI_drawAnimatedBack(void)
 	a = &anims[wbs->epsd][i];
 
 	if (a->ctr >= 0)
-	    V_DrawPatch(a->loc.x, a->loc.y, a->p[a->ctr]);
+	    V_DrawPatchStretchedY(a->loc.x, WI_SCALEY(a->loc.y), a->p[a->ctr],
+				  WI_SCALEY(SHORT(a->p[a->ctr]->height)));
     }
 
 }

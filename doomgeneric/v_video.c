@@ -195,6 +195,65 @@ void V_DrawPatch(int x, int y, patch_t *patch)
 }
 
 //
+// V_DrawPatchStretchedY
+// Like V_DrawPatch, but scales the patch vertically (nearest neighbour) to
+// dstheight rows, e.g. to stretch a 320x200 backdrop over a taller screen.
+// topoffset is scaled along with the patch.
+//
+
+void V_DrawPatchStretchedY(int x, int y, patch_t *patch, int dstheight)
+{
+    int col;
+    int w, srcheight;
+    int y0, y1, row;
+    column_t *column;
+    byte *desttop;
+    byte *source;
+
+    srcheight = SHORT(patch->height);
+    y -= SHORT(patch->topoffset) * dstheight / srcheight;
+    x -= SHORT(patch->leftoffset);
+    w = SHORT(patch->width);
+
+#ifdef RANGECHECK
+    if (x < 0
+     || x + w > SCREENWIDTH
+     || y < 0
+     || y + dstheight > SCREENHEIGHT)
+    {
+        I_Error("Bad V_DrawPatchStretchedY x=%i y=%i patch.width=%i dstheight=%i", x, y, w, dstheight);
+    }
+#endif
+
+    V_MarkRect(x, y, w, dstheight);
+
+    desttop = dest_screen + y * SCREENWIDTH + x;
+
+    for (col = 0; col < w; col++, desttop++)
+    {
+        column = (column_t *)((byte *)patch + LONG(patch->columnofs[col]));
+
+        // step through the posts in a column
+        while (column->topdelta != 0xff)
+        {
+            source = (byte *)column + 3;
+
+            // Destination rows whose source row (row * srcheight / dstheight)
+            // falls inside this post.
+            y0 = (column->topdelta * dstheight + srcheight - 1) / srcheight;
+            y1 = ((column->topdelta + column->length) * dstheight
+                  + srcheight - 1) / srcheight;
+
+            for (row = y0; row < y1; row++)
+                desttop[row * SCREENWIDTH]
+                    = source[row * srcheight / dstheight - column->topdelta];
+
+            column = (column_t *)((byte *)column + column->length + 4);
+        }
+    }
+}
+
+//
 // V_DrawPatchFlipped
 // Masks a column based masked pic to the screen.
 // Flips horizontally, e.g. to mirror face.

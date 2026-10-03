@@ -2115,7 +2115,26 @@ char *M_GetSaveGameDir(char *iwadname)
 
         free(topdir);
 #else
-        savegamedir = M_StringJoin(configdir, DIR_SEPARATOR_S, ".savegame/", NULL);
+        // Each IWAD gets its own folder, named after its file ("wad/doom1.wad"
+        // saves into ".savegame/doom1/"), so saves of different WADs never mix.
+        char *name = M_StringDuplicate(iwadname);
+        char *sep = strrchr(name, DIR_SEPARATOR);
+        char *dot;
+
+        if (sep != NULL)
+        {
+            memmove(name, sep + 1, strlen(sep));
+        }
+
+        dot = strrchr(name, '.');
+        if (dot != NULL && dot != name)
+        {
+            *dot = '\0';
+        }
+
+        savegamedir = M_StringJoin(configdir, DIR_SEPARATOR_S, ".savegame/",
+                                   name, DIR_SEPARATOR_S, NULL);
+        free(name);
 
         M_MakeDirectory(savegamedir);
 

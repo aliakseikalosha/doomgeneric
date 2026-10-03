@@ -57,6 +57,10 @@ unsigned int finalecount;
 #define	TEXTSPEED	3
 #define	TEXTWAIT	250
 
+// The art screens are 320x200 and are stretched to fill SCREENHEIGHT, so
+// positions measured on that art are scaled to match.
+#define F_SCALEY(y)	((y) * SCREENHEIGHT / 200)
+
 typedef struct
 {
     GameMission_t mission;
@@ -527,7 +531,7 @@ void F_CastPrint (char* text)
 	}
 		
 	w = SHORT (hu_font[c]->width);
-	V_DrawPatch(cx, 180, hu_font[c]);
+	V_DrawPatch(cx, F_SCALEY(180), hu_font[c]);
 	cx+=w;
     }
 	
@@ -547,7 +551,8 @@ void F_CastDrawer (void)
     patch_t*		patch;
     
     // erase the entire screen to a background
-    V_DrawPatch (0, 0, W_CacheLumpName (DEH_String("BOSSBACK"), PU_CACHE));
+    V_DrawPatchStretchedY (0, 0, W_CacheLumpName (DEH_String("BOSSBACK"), PU_CACHE),
+			   SCREENHEIGHT);
 
     F_CastPrint (DEH_String(castorder[castnum].name));
     
@@ -559,9 +564,9 @@ void F_CastDrawer (void)
 			
     patch = W_CacheLumpNum (lump+firstspritelump, PU_CACHE);
     if (flip)
-	V_DrawPatchFlipped(160, 170, patch);
+	V_DrawPatchFlipped(160, F_SCALEY(170), patch);
     else
-	V_DrawPatch(160, 170, patch);
+	V_DrawPatch(160, F_SCALEY(170), patch);
 }
 
 
@@ -576,25 +581,31 @@ F_DrawPatchCol
 {
     column_t*	column;
     byte*	source;
-    byte*	dest;
     byte*	desttop;
-    int		count;
+    int		srcheight;
+    int		y0;
+    int		y1;
+    int		row;
 	
     column = (column_t *)((byte *)patch + LONG(patch->columnofs[col]));
     desttop = I_VideoBuffer + x;
+    srcheight = SHORT(patch->height);
 
     // step through the posts in a column
     while (column->topdelta != 0xff )
     {
 	source = (byte *)column + 3;
-	dest = desttop + column->topdelta*SCREENWIDTH;
-	count = column->length;
-		
-	while (count--)
-	{
-	    *dest = *source++;
-	    dest += SCREENWIDTH;
-	}
+
+	// stretch the column to SCREENHEIGHT rows: draw the destination rows
+	// whose source row (row * srcheight / SCREENHEIGHT) is in this post
+	y0 = (column->topdelta * SCREENHEIGHT + srcheight - 1) / srcheight;
+	y1 = ((column->topdelta + column->length) * SCREENHEIGHT
+	      + srcheight - 1) / srcheight;
+
+	for (row = y0; row < y1; row++)
+	    desttop[row * SCREENWIDTH]
+		= source[row * srcheight / SCREENHEIGHT - column->topdelta];
+
 	column = (column_t *)(  (byte *)column + column->length + 4 );
     }
 }
@@ -692,7 +703,8 @@ static void F_ArtScreenDrawer(void)
 
         lumpname = DEH_String(lumpname);
 
-        V_DrawPatch (0, 0, W_CacheLumpName(lumpname, PU_CACHE));
+        V_DrawPatchStretchedY (0, 0, W_CacheLumpName(lumpname, PU_CACHE),
+                               SCREENHEIGHT);
     }
 }
 

@@ -234,7 +234,7 @@ void M_DrawThermo(int x,int y,int thermWidth,int thermDot);
 void M_DrawEmptyCell(menu_t *menu,int item);
 void M_DrawSelCell(menu_t *menu,int item);
 void M_WriteText(int x, int y, char *string);
-void M_WriteTextBig(int x, int y, char *string);
+void M_WriteMenuText(int x, int y, char *string);
 int  M_StringWidth(char *string);
 int  M_StringHeight(char *string);
 void M_StartMessage(char *string,void *routine,boolean input);
@@ -835,7 +835,8 @@ void M_DrawReadThis1(void)
 
     lumpname = DEH_String(lumpname);
     
-    V_DrawPatchDirect (0, 0, W_CacheLumpName(lumpname, PU_CACHE));
+    V_DrawPatchStretchedY (0, 0, W_CacheLumpName(lumpname, PU_CACHE),
+                           SCREENHEIGHT);
 
     ReadDef1.x = skullx;
     ReadDef1.y = skully;
@@ -853,7 +854,8 @@ void M_DrawReadThis2(void)
     // We only ever draw the second page if this is 
     // gameversion == exe_doom_1_9 and gamemode == registered
 
-    V_DrawPatchDirect(0, 0, W_CacheLumpName(DEH_String("HELP1"), PU_CACHE));
+    V_DrawPatchStretchedY(0, 0, W_CacheLumpName(DEH_String("HELP1"), PU_CACHE),
+                          SCREENHEIGHT);
 }
 
 
@@ -862,9 +864,9 @@ void M_DrawReadThis2(void)
 //
 void M_DrawSound(void)
 {
-    M_WriteTextBig(SoundDef.x, 30, "SOUND VOLUME");
-    M_WriteTextBig(SoundDef.x, SoundDef.y + LINEHEIGHT * sfx_vol + 1, "SFX VOLUME");
-    M_WriteTextBig(SoundDef.x, SoundDef.y + LINEHEIGHT * music_vol + 1, "MUSIC VOLUME");
+    M_WriteMenuText(SoundDef.x, 30, "SOUND VOLUME");
+    M_WriteMenuText(SoundDef.x, SoundDef.y + LINEHEIGHT * sfx_vol + 1, "SFX VOLUME");
+    M_WriteMenuText(SoundDef.x, SoundDef.y + LINEHEIGHT * music_vol + 1, "MUSIC VOLUME");
 
     M_DrawThermo(SoundDef.x,SoundDef.y+LINEHEIGHT*(sfx_vol+1),
 		 16,sfxVolume);
@@ -1014,14 +1016,23 @@ void M_Episode(int choice)
 //
 
 //
-// Same font as M_WriteText, drawn at twice the size (menu labels).
+// Menu label text sized to match the main menu patches. Same font as
+// M_WriteText, but the first letter of each word (and every digit) is drawn at
+// twice its size and the other letters at 1.5 times, like the main menu's
+// small capitals.
 //
-void M_WriteTextBig(int x, int y, char *string)
+#define MENUTEXT_SMALL_NUM	10	// small letters are 10/7 as tall as the
+#define MENUTEXT_SMALL_DEN	7	// font and 3/2 as wide (7 is its height)
+#define MENUTEXT_SMALL_DROP	(2 * MENUTEXT_SMALL_DEN - MENUTEXT_SMALL_NUM)
+
+void M_WriteMenuText(int x, int y, char *string)
 {
-    int c, w, col, i;
+    boolean wordstart = true;
+    boolean big;
+    int c, w, h, dw, dh, ty, col, row, srcrow;
     patch_t *patch;
     column_t *column;
-    byte *dest, *source;
+    byte *source;
 
     for ( ; *string; string++)
     {
@@ -1029,33 +1040,53 @@ void M_WriteTextBig(int x, int y, char *string)
 	if (c < 0 || c >= HU_FONTSIZE)
 	{
 	    x += 8;
+	    wordstart = true;
 	    continue;
 	}
 
+	big = wordstart || (*string >= '0' && *string <= '9');
+	wordstart = false;
+
 	patch = hu_font[c];
 	w = SHORT(patch->width);
-	if (x + w * 2 > SCREENWIDTH)
+	h = SHORT(patch->height);
+	if (big)
+	{
+	    dw = w * 2;
+	    dh = h * 2;
+	    ty = y - SHORT(patch->topoffset) * 2;
+	}
+	else
+	{
+	    dw = w * 3 / 2;
+	    dh = h * MENUTEXT_SMALL_NUM / MENUTEXT_SMALL_DEN;
+	    // Sit on the same baseline as the large letters.
+	    ty = y + MENUTEXT_SMALL_DROP
+		 - SHORT(patch->topoffset) * MENUTEXT_SMALL_NUM / MENUTEXT_SMALL_DEN;
+	}
+
+	if (x + dw > SCREENWIDTH)
 	    break;
 
-	V_MarkRect(x, y, w * 2, SHORT(patch->height) * 2);
-	for (col = 0; col < w; col++)
+	V_MarkRect(x, ty, dw, dh);
+	for (col = 0; col < dw; col++)
 	{
-	    column = (column_t *)((byte *)patch + LONG(patch->columnofs[col]));
+	    column = (column_t *)((byte *)patch
+				  + LONG(patch->columnofs[col * w / dw]));
 	    while (column->topdelta != 0xff)
 	    {
 		source = (byte *)column + 3;
-		dest = I_VideoBuffer + (y + column->topdelta * 2) * SCREENWIDTH
-		       + x + col * 2;
-		for (i = 0; i < column->length; i++)
+		for (row = 0; row < dh; row++)
 		{
-		    dest[0] = dest[1] = source[i];
-		    dest[SCREENWIDTH] = dest[SCREENWIDTH + 1] = source[i];
-		    dest += SCREENWIDTH * 2;
+		    srcrow = row * h / dh - column->topdelta;
+		    if (srcrow >= 0 && srcrow < column->length)
+			I_VideoBuffer[(ty + row) * SCREENWIDTH + x + col]
+			    = source[srcrow];
 		}
 		column = (column_t *)((byte *)column + column->length + 4);
 	    }
 	}
-	x += w * 2;
+	x += dw;
     }
 }
 
@@ -1070,20 +1101,20 @@ void M_DrawOptions(void)
     V_DrawPatchDirect(108, 15, W_CacheLumpName(DEH_String("M_OPTTTL"),
                                                PU_CACHE));
 
-    // All labels use the same (double size) font.
-    M_WriteTextBig(x, y + LINEHEIGHT * endgame, "END GAME");
-    M_WriteTextBig(x, y + LINEHEIGHT * messages,
+    // All labels use the main menu's text size.
+    M_WriteMenuText(x, y + LINEHEIGHT * endgame, "END GAME");
+    M_WriteMenuText(x, y + LINEHEIGHT * messages,
                 showMessages ? "MESSAGES: ON" : "MESSAGES: OFF");
-    M_WriteTextBig(x, y + LINEHEIGHT * detail, detailText[detailLevel]);
-    M_WriteTextBig(x, y + LINEHEIGHT * scrnsize, "SCREEN SIZE");
+    M_WriteMenuText(x, y + LINEHEIGHT * detail, detailText[detailLevel]);
+    M_WriteMenuText(x, y + LINEHEIGHT * scrnsize, "SCREEN SIZE");
     M_DrawThermo(OptionsDef.x, OptionsDef.y + LINEHEIGHT * (scrnsize + 1),
                  9, screenSize);
-    M_WriteTextBig(x, y + LINEHEIGHT * mousesens, "MOUSE SENSITIVITY");
+    M_WriteMenuText(x, y + LINEHEIGHT * mousesens, "MOUSE SENSITIVITY");
     M_DrawThermo(OptionsDef.x, OptionsDef.y + LINEHEIGHT * (mousesens + 1),
                  10, mouseSensitivity);
-    M_WriteTextBig(x, y + LINEHEIGHT * soundvol, "SOUND VOLUME");
-    M_WriteTextBig(x, y + LINEHEIGHT * dithermode, ditherModeNames[ditherMode]);
-    M_WriteTextBig(x, y + LINEHEIGHT * autofire,
+    M_WriteMenuText(x, y + LINEHEIGHT * soundvol, "SOUND VOLUME");
+    M_WriteMenuText(x, y + LINEHEIGHT * dithermode, ditherModeNames[ditherMode]);
+    M_WriteMenuText(x, y + LINEHEIGHT * autofire,
                 autoFire ? "AUTO FIRE: ON" : "AUTO FIRE: OFF");
 }
 
